@@ -1,61 +1,30 @@
-var Imap = require('imap'),
-    inspect = require('util').inspect;
+var http = require('http');
+var url = require('url');
+var qs = require('querystring');
+var fs = require('fs');
 
-var imap = new Imap({
-  user: 'mygmailname@gmail.com',
-  password: 'mygmailpassword',
-  host: 'imap.gmail.com',
-  port: 993,
-  tls: true,
-  tlsOptions: { rejectUnauthorized: false }
-});
-
-function openInbox(cb) {
-  imap.openBox('INBOX', true, cb);
-}
-
-imap.once('ready', function() {
-  openInbox(function(err, box) {
-    if (err) throw err;
-    var f = imap.seq.fetch('1:3', {
-      bodies: 'HEADER.FIELDS (FROM TO SUBJECT DATE)',
-      struct: true
-    });
-    f.on('message', function(msg, seqno) {
-      console.log('Message #%d', seqno);
-      var prefix = '(#' + seqno + ') ';
-      msg.on('body', function(stream, info) {
-        var buffer = '';
-        stream.on('data', function(chunk) {
-          buffer += chunk.toString('utf8');
-        });
-        stream.once('end', function() {
-          console.log(prefix + 'Parsed header: %s', inspect(Imap.parseHeader(buffer)));
-        });
-      });
-      msg.once('attributes', function(attrs) {
-        console.log(prefix + 'Attributes: %s', inspect(attrs, false, 8));
-      });
-      msg.once('end', function() {
-        console.log(prefix + 'Finished');
-      });
-    });
-    f.once('error', function(err) {
-      console.log('Fetch error: ' + err);
-    });
-    f.once('end', function() {
-      console.log('Done fetching all messages!');
-      imap.end();
-    });
-  });
-});
-
-imap.once('error', function(err) {
-  console.log(err);
-});
-
-imap.once('end', function() {
-  console.log('Connection ended');
-});
-
-imap.connect()
+http.createServer(function(req, res) {
+    res.writeHead(200, {'Content-Type': 'text/html'});
+    var u = url.parse(req.url);
+    var postData = '';
+    var body = '';
+    if (u.pathname == '/login') {
+        if (req.method == 'POST') {
+            req.on('data', function(data) {
+                body += data;
+            });
+           req.on('end', function() {
+               postData = qs.parse(body);
+               res.write('Username: ' + postData.username);
+               res.write('<br>');
+               res.end('Password: ' + postData.password);
+           });
+        }
+    } else if (u.pathname == '/logout') {
+        res.end('You are now logged out');
+    } else {
+        res.write(fs.readFileSync(__dirname + '/login.html'));
+        res.end();
+    }
+}).listen(80, '127.0.0.1');
+console.log('Server running on 127.0.0.1 on Port 80');
