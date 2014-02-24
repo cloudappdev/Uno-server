@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>
+        Messages
+    </title>
+</head>
+<body>
+    <div id="navbar">
+        <div style="text-align:center;">
+            <span style="font-size:xx-large">Uno</span>
+            <a href="/logout" style="float:right;">Lougout</a>
+        </div>
+    </div>
+    <div id="content">
+        <div>
+            <b>Messages</b>
+        </div>
+        <br>
+        <br>
+    </div>
+<script>
+var subject = document.createElement("DIV");
+subject.innerHTML="Test Subject";
+var from = document.createElement("DIV");
+from.innerHTML="test@gmail.com";
+var message = document.createElement("DIV");
+message.innerHTML = "Test Message";
+document.getElementById("content").appendChild(subject);
+document.getElementById("content").appendChild(from);
+document.getElementById("content").appendChild(message);
+</script>
+</body>
+</html>
