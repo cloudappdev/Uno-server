@@ -18,8 +18,8 @@ http.createServer(function(req, res) {
         });
         console.log('Login');
         imp = new Imap({
-            user: 'moddroid8@gmail.com',
-            password: 'cyanogenmod',
+            user: 'email@gmail.com',
+            password: 'password',
             host: 'imap.gmail.com',
             port: 993,
             tls: true,
