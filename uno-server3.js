@@ -19,6 +19,15 @@ function User(imap_handle, session_id, push_id) {
     }
 }
 
+
+function Message(to, from, subject, body) {
+    this.to = to;
+    this.from = from;
+    this.subject = subject;
+    this.body = body;
+}
+
+
 var genSessionID = function() {
     var sha = crypto.createHash('sha256');
     sha.update(Math.random.toString());
@@ -55,7 +64,7 @@ http.createServer(function(req, res) {
                         var new_user = new User(imap_handle, sess_id, null);
                         users[request_json.email] = new_user;
                         console.log(users[request_json.email]);
-                        var json_success = {'success': 0, 'email':
+                        var json_success = {'success': true, 'email':
                                             request_json.email, 'session_id':
                                             sess_id};
                         console.log(json_success);
@@ -66,7 +75,7 @@ http.createServer(function(req, res) {
                         res.end(response_json);
                     }
                 } catch (err) {
-                    var json_err = {'success': 1, 'error': err};
+                    var json_err = {'success': false, 'error': err};
                     var response_json = JSON.stringify(json_err);
                     console.log(response_json);
                     res.writeHead(200, {'Content-Type': 'application/json'});
@@ -94,8 +103,8 @@ http.createServer(function(req, res) {
                     imap.on('mail', function(num) {
                         console.log('You have ' + num + ' new emails');
                     });
-                    console.log(users[request_json.email].getImapHandle());
-                    //imap.connect();
+                    //console.log(users[request_json.email].getImapHandle());
+                    imap.connect();
                     //setTimeout(function() {imap.end();}, 120000);
                 //} catch (err) {
                     //console.log('Error');
@@ -113,6 +122,7 @@ http.createServer(function(req, res) {
                 var request_json = JSON.parse(body);
                 console.log(request_json);
                 var imap = users[request_json.email].getImapHandle();
+                var messages = Array();
                 function openABox(cb) {
                     imap.openBox('INBOX', true, cb);
                 }
@@ -129,7 +139,13 @@ http.createServer(function(req, res) {
                                   buffer += chunk.toString('utf8');
                               });
                               stream.once('end', function() {
-                                  console.log(buffer);
+                                  var headers = Imap.parseHeader(buffer);
+                                  var m = new Message(headers.to, headers.from,
+                                      headers.subject, buffer);
+                                  messages.push(m);
+                                  res.writeHead(200, {'Content-Type':
+                                                     'application/json'});
+                                  res.end(JSON.stringify(messages));
                               });
                           });
                       });
@@ -145,7 +161,57 @@ http.createServer(function(req, res) {
             }
         });
     } else if (request_url.pathname == '/search') {
-        console.log('Searching');
+         console.log('Fetching');
+        var body = '';
+        req.on('data', function(data) {
+            body += data;
+        });
+        req.on('end', function() {
+            try {
+                var request_json = JSON.parse(body);
+                console.log(request_json);
+                var imap = users[request_json.email].getImapHandle();
+                var messages = Array();
+                function openABox(cb) {
+                    imap.openBox('INBOX', true, cb);
+                }
+                imap.on('ready', function() {
+                    openABox(function(err, box) {
+                      if (err) throw err;
+                      imap.search([['TEXT', request_json.query] ],
+                          function(err, results) {
+                      if (err) throw err;
+                      var f = imap.seq.fetch(results, 
+                          { bodies : ''});
+                      f.on('message', function(msg, seqno) {
+                          msg.on('body', function(stream, info) {
+                              var buffer = '';
+                              stream.on('data', function(chunk) {
+                                  buffer += chunk.toString('utf8');
+                              });
+                              stream.once('end', function() {
+                                  var headers = Imap.parseHeader(buffer);
+                                  var m = new Message(headers.to, headers.from,
+                                      headers.subject, buffer);
+                                  messages.push(m);
+                                  res.writeHead(200, {'Content-Type':
+                                                     'application/json'});
+                                  res.end(JSON.stringify(messages));
+                              });
+                          });
+                      });
+                      f.once('end', function() {
+                          console.log('Done Fetching');
+                          imap.end();
+                      });
+                   });
+                });
+               });
+                imap.connect();
+            } catch (err) {
+                console.log('An Error Occured');
+            }
+        });
     } else if (request_url.pathname == '/logout') {
         console.log('Logging you out');
     } else {
