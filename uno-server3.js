@@ -143,15 +143,15 @@ http.createServer(function(req, res) {
                                   var m = new Message(headers.to, headers.from,
                                       headers.subject, buffer);
                                   messages.push(m);
-                                  res.writeHead(200, {'Content-Type':
-                                                     'application/json'});
-                                  res.end(JSON.stringify(messages));
                               });
                           });
                       });
                       f.once('end', function() {
                           console.log('Done Fetching');
                           imap.end();
+                          res.writeHead(200, {'Content-Type':
+                                              'application/json'});
+                          res.end(JSON.stringify(messages));
                       });
                    });
                 });
@@ -194,15 +194,16 @@ http.createServer(function(req, res) {
                                   var m = new Message(headers.to, headers.from,
                                       headers.subject, buffer);
                                   messages.push(m);
-                                  res.writeHead(200, {'Content-Type':
-                                                     'application/json'});
-                                  res.end(JSON.stringify(messages));
-                              });
+                             });
                           });
                       });
                       f.once('end', function() {
                           console.log('Done Fetching');
                           imap.end();
+                          res.writeHead(200, {'Content-Type':
+                                              'application/json'});
+                          res.end(JSON.stringify(messages));
+                          console.log(messages);
                       });
                    });
                 });
