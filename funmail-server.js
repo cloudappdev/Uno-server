@@ -4,7 +4,6 @@ var Imap = require('imap');
 var crypto = require('crypto');
 var redis = require('redis');
 var MailParser = require('mailparser').MailParser;
-var em_parse = require('parser_email');
 
 var num_users = 0;
 var users = {};
@@ -14,7 +13,6 @@ var client = redis.createClient(10985, 'pub-redis-10985.us-east-1-3.3.ec2.garant
 
 client.on('error', function(err) {
     console.log('Error: ' + err);
-    exit(1);
 });
 
 var sendRes = function(res, HTTP_CODE, json) {
@@ -47,12 +45,13 @@ var genAuthToken = function() {
     return sha.digest('hex');
 }
 
-function Message(from, to, subject, date, text) {
+function Message(from, to, subject, date, text, html) {
     this.from = from;
     this.to = to;
     this.subject = subject;
     this.date = date;
     this.text = text;
+    this.html = html;
 }
 
 var logout = function(id) {
@@ -60,46 +59,56 @@ var logout = function(id) {
     imap_handle.end();
 }
 
-var doFetch = function(id, num_msgs) {
+var doSearch = function(res, id, query) {
+    doFetch(res, id, 0, query); 
+}
+
+var doFetch = function(res, id, num_msgs, query) {
     var imap_handle = users[id];
     imap_handle.openBox('INBOX', true, function(err, box) {
-        if (err) return null;
-        if (num_msgs > box.messages.total) return null;
+        //if (err) return null;
+        //if (num_msgs > box.messages.total) return null;
+        if (num_msgs < 0) num_msgs = box.messages.total;
+        if (num_msgs == 0 && query) {
+            imap_handle.search([['TEXT', query]], function(err, results) {
+                console.log(results);
+            });
+            return;
+        }
+        var parsed_msgs = 0;
         var messages = new Array();
-        var f = imap_handle.seq.fetch(1,
-                               { bodies: ['HEADER.FIELDS (FROM TO SUBJECT DATE)', 'TEXT']});
+        var f = imap_handle.seq.fetch(1, { bodies: ''});
         f.on('message', function(msg, seqno) {
             mailparser = new MailParser();
-            mailparser.on('end', function(mail_object) {
-                var message = new Message(mail_object.from, mail_object.to,
-                mail_object.subject, mail_object.headers, mail_object.text);
-                //console.log(message);
-                messages.push(message);
-            });
             msg.on('body', function(stream, info) {
-                var mail = '';
                 stream.on('data', function(chunk) {
-                    mail += chunk.toString('utf8');
-                    mailparser.write(chunk.toString('utf8'));
+                    mailparser.write(chunk.toString());
                 });
                 stream.on('end', function() {
-                    console.log('aaaaaaaa: ' + info.which);
-                    parser = new em_parse(mail);
-                    parser.on('part', function(type, body) {
+                    mailparser.end();
+                    mailparser.on('end', function(mail) {
+                        parsed_msgs++;
+                        var message = new Message(mail.from, mail.to,
+                                                  mail.subject, mail.date,
+                                                  mail.text, mail.html);
+                        messages.push(message);
+                        if (parsed_msgs == num_msgs) {
+                            var response_json = {'success': true,
+                                                 'messages': messages};
+                            sendRes(res, 200, response_json);
+                        }
                     });
-                    parser.execute();
-                    console.log(mail);
                 });
             });
             msg.once('end', function() {
-                mailparser.end();
+                console.log('Done with message');
             });
         });
         f.once('error', function(err) {
-            return err;
+            sendRes(res, 400, {'success': false});
         });
         f.on('end', function() {
-            console.log('akdlfjskladfjsdklfj');
+            console.log('Done with messages');
         });
     });
 }
@@ -159,10 +168,9 @@ http.createServer(function(req, res) {
     } else if (request_url_parts[1] == 'messages') {
         if (!isNaN(request_url_parts[2])) {
             if (!isNaN(request_url_parts[3])) {
-                var messages = doFetch(request_url_parts[2],
-                                     request_url_parts[3]);
+                doFetch(res, request_url_parts[2], request_url_parts[3], false);
             } else if (request_url_parts[3] == 'all'){
-                var messages = doFetch(request_url_parts[2], -1);
+                doFetch(res, request_url_parts[2], -1, false);
             } else {
                 var response_json = {'success': false};
                 sendRes(res, 400, response_json);
@@ -171,8 +179,18 @@ http.createServer(function(req, res) {
             var response_json = {'success': false};
             sendRes(res, 400, response_json);
         }
+    } else if (request_url_parts[1] == 'search') {
+        if (!isNaN(request_url_parts[2])) {
+           if (req.method == 'GET') {
+               var query_params = url.parse(req.url, true).query;
+               if ('query' in query_params) {
+                   doSearch(res, request_url_parts[2], query_params['query']);
+               }
+           } 
+        }
     } else {
         logout(0);
+        sendRes(res, 200, {'success': true});
     }
 }).listen(5000, '127.0.0.1');
 console.log('Server listening on 127.0.0.1 on port 5000');
