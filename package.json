@@ -1,0 +1,10 @@
+{
+  "name": "uno",
+  "version": "1.0.0",
+  "dependencies": {},
+  "devDependencies": {
+    "imap": "~0.8.10",
+    "redis": "~0.10.1",
+    "mailparser": "~0.4.1"
+  }
+}
